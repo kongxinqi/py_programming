@@ -1,0 +1,72 @@
+import socket
+import threading
+
+# 存储有效的用户凭据
+users = {
+    "user1": "pass1",
+    "user2": "pass2"
+}
+
+# 存储在线用户及其对应的socket连接
+online_users = {}
+
+def handle_client(client_socket):
+    username = None
+    try:
+        # 接收登录信息
+        login_data = client_socket.recv(1024).decode().split(":")
+        if len(login_data) != 3 or login_data[0] != "LOGIN":
+            client_socket.send("INVALID_REQUEST".encode())
+            return
+        
+        _, uname, pwd = login_data
+        
+        # 验证用户凭据
+        if uname in users and users[uname] == pwd:
+            client_socket.send("LOGIN_SUCCESS".encode())
+            username = uname
+            online_users[username] = client_socket
+            print(f"[系统] {username} 已登录")
+        else:
+            client_socket.send("LOGIN_FAIL".encode())
+            return
+        
+        # 处理消息转发
+        while True:
+            data = client_socket.recv(1024).decode()
+            if not data:
+                break
+                
+            # 解析消息格式：RECEIVER:message
+            if ":" not in data:
+                continue
+                
+            receiver, message = data.split(":", 1)
+            if receiver in online_users:
+                online_users[receiver].send(f"{username}:{message}".encode())
+                print(f"[转发] {username} -> {receiver}: {message}")
+            else:
+                client_socket.send(f"ERROR:{receiver}不在线".encode())
+                
+    except Exception as e:
+        print(f"错误: {e}")
+    finally:
+        if username in online_users:
+            del online_users[username]
+            print(f"[系统] {username} 已下线")
+        client_socket.close()
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(('0.0.0.0', 9999))
+    server.listen(5)
+    print("服务器已启动，等待连接...")
+    
+    while True:
+        client_sock, addr = server.accept()
+        print(f"接收到来自 {addr} 的连接")
+        thread = threading.Thread(target=handle_client, args=(client_sock,))
+        thread.start()
+
+if __name__ == "__main__":
+    main()
