@@ -1,0 +1,52 @@
+import socket
+import threading
+
+def receive_messages(sock):
+    while True:
+        try:
+            data = sock.recv(1024).decode()
+            if not data:
+                break
+            if data.startswith("ERROR:"):
+                print(f"\n[错误] {data[6:]}")
+            else:
+                sender, message = data.split(":", 1)
+                print(f"\n[{sender}]: {message}")
+        except:
+            break
+
+def main():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(('127.0.0.1', 9999))
+    
+    # 登录验证
+    while True:
+        username = input("用户名: ")
+        password = input("密码: ")
+        sock.send(f"LOGIN:{username}:{password}".encode())
+        response = sock.recv(1024).decode()
+        
+        if response == "LOGIN_SUCCESS":
+            print("登录成功！")
+            break
+        else:
+            print("登录失败，请重试")
+    
+    # 启动消息接收线程
+    recv_thread = threading.Thread(target=receive_messages, args=(sock,))
+    recv_thread.daemon = True
+    recv_thread.start()
+    
+    # 发送消息
+    print("\n发送消息格式: 接收方:消息内容")
+    print("例如: user2:你好\n")
+    while True:
+        msg = input()
+        if ":" not in msg:
+            print("格式错误！请使用 接收方:消息内容 格式")
+            continue
+        receiver, message = msg.split(":", 1)
+        sock.send(f"{receiver}:{message}".encode())
+
+if __name__ == "__main__":
+    main()
